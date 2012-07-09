@@ -1,0 +1,1090 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+
+ADOBE SYSTEMS INCORPORATED
+Copyright 2008-2011 Adobe Systems Incorporated
+All Rights Reserved.
+
+NOTICE: Adobe permits you to use, modify, and distribute this file
+in accordance with the terms of the license agreement accompanying it.
+
+Author: Jozsef Vass
+-->
+
+<!-- Adobe labs limit width to 520 pixels. -->
+<s:Application xmlns:fx="http://ns.adobe.com/mxml/2009"
+			   xmlns:s="library://ns.adobe.com/flex/spark"
+			   xmlns:mx="library://ns.adobe.com/flex/mx"
+			   width="820" height="450" backgroundColor="0xffffff" creationComplete="init()">
+	<fx:Script>
+		<![CDATA[
+			import flash.events.SampleDataEvent;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.ArrayList;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.formatters.DateFormatter;
+			import mx.rpc.events.ResultEvent;
+			
+			
+			import spark.events.GridEvent;
+			import spark.events.GridSelectionEvent;
+			
+			// rtmfp server address (Adobe Cirrus or FMS)
+			[Bindable] private var connectUrl:String = "rtmfp://210.51.38.12/cr";
+			
+			// developer key, please insert your developer key here
+			private const DeveloperKey:String = "4cd930a206f39d7d7566149d-396053390564";
+			
+			// please insert your web service URL here for exchanging peer ID
+			private const WebServiceUrl:String = "http://www.localshiyishi.cn/reg/index.do";
+			private const userResumeUrl:String = "http://www.localshiyishi.cn/enterp/resume/viewSwf.html?uid=";
+			
+			// this is the connection to rtmfp server
+			private var netConnection:NetConnection;	
+			
+			// outgoing media stream (audio, video, text and some control messages)
+			private var outgoingStream:NetStream;
+			
+			// incoming media stream (audio, video, text and some control messages)
+			private var incomingStream:NetStream;
+			
+			// ID management serice
+			private var idManager:AbstractIdManager;
+			
+			private var remoteVideo:Video;
+			
+			// login/registration states
+			private const LoginNotConnected:String = "LoginNotConnected";
+			private const LoginConnecting:String = "LoginConnecting";
+			private const LoginConnected:String = "LoginConnected";
+			private const LoginDisconnecting:String = "LoginDisconnecting";
+			
+			// call states, only used when LoginConnected		
+			private const CallReady:String = "CallReady";
+			private const CallTesting:String = "CallTesting";
+			private const CallBeTesting:String = "CallBeTesting";
+			private const CallCalling:String = "CallCalling";
+			private const CallFmsRinging:String = "CallFmsRinging";
+			private const CallP2pRinging:String = "CallP2pRinging";
+			private const CallEstablished:String = "CallEstablished";
+			private const CallFailed:String = "CallFailed";
+			
+			// available microphone devices
+			[Bindable] private var micNames:ArrayList = new ArrayList();
+			private var micIndex:int = 0;
+			
+			// available camera deviced
+			[Bindable] private var cameraNames:ArrayList = new ArrayList();
+			private var cameraIndex:int = 0;
+			
+			private var activityTimer:Timer;
+			
+			private var myName:String="";
+			private var myAccountId:String;
+			private var myId:String="";
+			
+			private var remoteAccountId:String = "";
+			private var remoteName:String = "";
+			private var remoteId:String = "";
+			private var nextRemoteName:String = "";
+			private var nextRemoteId:String = "";
+			
+			private var callTimer:int;
+			
+			private var ringer:Sound;
+			private var ringerChannel:SoundChannel;
+			
+			// signaling
+			/**
+			 * Simple request-reply protocol.
+			 * 
+			 * Call flow 1, caller cancels call
+			 * FP1 --- Invite --> FP2
+			 * FP1 --- Cancel --> FP2
+			 * FP1 <-- Ok ------- FP2
+			 * 
+			 * Call flow 2, callee rejects call
+			 * FP1 --- Invite --> FP2
+			 * FP1 <-- Reject --- FP2
+			 * 
+			 * * Call flow 3, call established and caller ends call
+			 * FP1 --- Invite --> FP2
+			 * FP1 <-- Accept --- FP2
+			 * FP1 --- Bye -----> FP2
+			 * FP1 <-- Ok ------- FP2
+			 */
+			private const Relay:String = "relay";
+			private const p2pTest:String = "p2pTest";
+			private const InviteP2p:String = "inviteP2p";
+			private const InviteFms:String = "inviteFms";
+			private const Cancel:String = "cancel";
+			private const Accept:String = "accept";
+			private const Reject:String = "reject";
+			private const Bye:String = "bye";
+			private const Ok:String = "ok";
+			
+			[Bindable]
+			private var userList:ArrayCollection;
+			
+			private var userRole:String;
+			
+			//p2p connect checker timer
+			private var p2pCheckTimer:Timer;
+			
+			private var p2pSuccess:Boolean;
+			
+			// called when application is loaded            		
+			private function init():void
+			{
+				//test live
+				myAccountId = FlexGlobals.topLevelApplication.parameters.userId;
+				myName = FlexGlobals.topLevelApplication.parameters.userName;
+				userRole = FlexGlobals.topLevelApplication.parameters.userRole;
+				//test live
+				status("Player: " + Capabilities.version + "\n");
+				
+				currentState = LoginNotConnected;
+				
+				var mics:Array = Microphone.names;
+				if (mics)
+				{
+					micNames.source = mics;
+				}
+				else
+				{
+					infoMsg("没有选择话筒!");
+					status("No microphone available.\n");
+				}
+				
+				var cameras:Array = Camera.names;
+				if (cameras)
+				{
+					cameraNames.source = cameras;
+				}
+				else
+				{
+					infoMsg("没有选择摄像头!");
+					status("No camera available.\n");
+				}
+				
+				// statistics timer
+				activityTimer = new Timer(1000);
+				activityTimer.addEventListener(TimerEvent.TIMER, onActivityTimer);
+				activityTimer.start();
+				
+				// selected mic device
+				micIndex = 0;
+				
+				micSelection.selectedIndex = micIndex;
+				
+				// selected camera device
+				cameraIndex = 0;
+				cameraSelection.selectedIndex = cameraIndex;
+				
+				// mic volume
+				var micVolume:int = 50;
+				
+				micVolumeSlider.value = micVolume;
+				
+				// speaker volume
+				var speakerVolume:Number = 80;
+				
+				speakerVolumeSlider.value = speakerVolume;
+				
+				// speaker volume
+				var videoQuality:Number = 80;
+				
+				videoQualitySlider.value = videoQuality;
+				
+				// configure audio and video
+				var mic:Microphone = getMicrophone();
+				if (mic)
+				{
+					mic.gain = micVolume;
+					
+					mic.addEventListener(StatusEvent.STATUS, onDeviceStatus);
+					mic.addEventListener(ActivityEvent.ACTIVITY, onDeviceActivity);
+					
+					handleCodecChange();
+				}
+				
+				var camera:Camera = Camera.getCamera(cameraIndex.toString());
+				if (camera)
+				{
+					camera.addEventListener(StatusEvent.STATUS, onDeviceStatus);
+					camera.addEventListener(ActivityEvent.ACTIVITY, onDeviceActivity);
+					
+					cameraChanged();
+				}
+				//test live
+				onConnect();
+				//test live
+			}
+			
+			private function status(msg:String):void
+			{
+				statusArea.text += msg;
+				statusArea.validateNow();
+				trace("ScriptDebug: " + msg);
+			}
+			
+			// user connect
+			private function onConnect():void
+			{
+				//test
+				//myAccountId = myAccountIdTxt.text;
+				//myName = myNameTxt.text;
+				//userRole = userRoleTxt.text;
+				//test
+				
+				currentState = LoginConnecting;
+				statusArea.text = "";				
+				netConnection = new NetConnection();
+				netConnection.addEventListener(NetStatusEvent.NET_STATUS, netConnectionHandler);
+				
+				// incoming call coming on NetConnection object
+				var c:Object = new Object();
+				c.onRelay = function(id:String, action:String, name:String):void
+				{
+					status("Request: " + action + " from: " + id + " (" + name + ")\n");
+					
+					if (p2pTest == action)
+					{
+						if (currentState == CallReady)
+						{
+							currentState = CallBeTesting;
+							remoteId = id;
+							infoMsg("与"+name+"连线测试中...");
+							// callee subscribes to media, to be able to get the remote user name
+							incomingStream = new NetStream(netConnection, id);
+							incomingStream.addEventListener(NetStatusEvent.NET_STATUS, incomingStreamHandler);
+							incomingStream.play("media-caller");
+						}
+						else
+						{
+							infoMsg("刚刚拒绝了" + name + "的呼叫");
+							status("Request: " + action + " from: " + " (" + name + ") rejected!\n");
+							netConnection.call(Relay, null, id, Reject, myName);
+						}
+					}
+					else if (InviteP2p == action || InviteFms == action)					
+					{
+						if (currentState == CallBeTesting)
+						{						
+							ring();	
+							if (InviteP2p == action)
+							{
+								currentState = CallP2pRinging;
+								// callee subscribes to media, to be able to get the remote user name
+								incomingStream = new NetStream(netConnection, id);
+								incomingStream.addEventListener(NetStatusEvent.NET_STATUS, incomingStreamHandler);
+								incomingStream.play("media-caller");
+							}
+							else if (InviteFms == action)
+							{
+								currentState = CallFmsRinging;
+								// callee subscribes to media, to be able to get the remote user name
+								incomingStream = new NetStream(netConnection);
+								incomingStream.addEventListener(NetStatusEvent.NET_STATUS, incomingStreamHandler);
+								incomingStream.play(remoteId+"_"+myId);
+							}
+							
+							// set volume for incoming stream
+							var st:SoundTransform = new SoundTransform(speakerVolumeSlider.value / 100);
+							incomingStream.soundTransform = st;
+							
+							incomingStream.receiveAudio(false);
+							incomingStream.receiveVideo(false);
+							
+							var i:Object = new Object;
+							
+							i.onIm = function(name:String, text:String):void
+							{
+								textOutput.text += name + ": " + text + "\n";
+								textOutput.validateNow();
+							}
+							incomingStream.client = i;
+							
+							remoteName = name;
+							remoteId = id;
+							
+						}
+						else
+						{
+							infoMsg("刚刚拒绝了" + name + "的呼叫");
+							status("Request: " + action + " from: " + " (" + name + ") rejected!\n");
+							netConnection.call(Relay, null, id, Reject, myName);
+						}
+					}
+					else if (Reject == action)
+					{
+						currentState = CallReady;	
+						onHangup();		
+					}
+					else if (Accept == action)
+					{
+						infoMsg("与"+remoteName+"通话中...");
+						currentState = CallEstablished;
+					}
+					else if (Bye == action)
+					{
+						currentState = CallReady;
+						onHangup();
+					}
+					else if (Cancel == action)
+					{
+						currentState = CallReady;
+						onHangup();
+					}
+				}
+				
+				netConnection.client = c;
+				
+				try
+				{
+					netConnection.connect(connectUrl, DeveloperKey);
+				}
+				catch (e:ArgumentError)
+				{
+					status("Incorrect connet URL\n");
+					return;
+				}
+				infoMsg("正在连接到" + connectUrl);
+				status("Connecting to " + connectUrl + "\n");
+			}
+			
+			private function netConnectionHandler(event:NetStatusEvent):void
+			{
+				status("NetConnection event: " + event.info.code + "\n");
+				
+				switch (event.info.code)
+				{
+					case "NetConnection.Connect.Success":
+						connectSuccess();
+						break;
+					
+					case "NetConnection.Connect.Closed":
+						infoMsg("已断开连接");
+						currentState = LoginNotConnected;
+						break;
+					
+					case "NetStream.Connect.Success":
+						// we get this when other party connects to our outgoing stream
+						infoMsg("正在与" + remoteName + "连线...");						
+						status("Connection from: " + event.info.stream.farID + "\n");
+						break;
+					
+					case "NetConnection.Connect.Failed":
+						infoMsg("连接未成功!");
+						status("Unable to connect to " + connectUrl + "\n");
+						currentState = LoginNotConnected;
+						break;
+				}
+			}
+			
+			private function outgoingStreamHandler(event:NetStatusEvent):void
+			{
+				status("Outgoing stream event: " + event.info.code + "\n");
+			}
+			
+			private function incomingStreamHandler(event:NetStatusEvent):void
+			{
+				status("Incoming stream event: " + event.info.code + "\n");
+			}
+			
+			// connection to rtmfp server succeeded and we register our peer ID with an id exchange service
+			// other clients can use id exchnage service to lookup our peer ID
+			private function connectSuccess():void
+			{
+				myId = netConnection.nearID;
+				infoMsg("连接成功!");
+				status("Connected, my ID: " + netConnection.nearID + "\n");
+				
+				// exchange peer id using web service
+				idManager = new HttpIdManager();
+				idManager.service = WebServiceUrl;
+				
+				idManager.addEventListener("registerSuccess", idManagerEvent);
+				idManager.addEventListener("registerFailure", idManagerEvent);
+				idManager.addEventListener("idManagerError", idManagerEvent);
+				idManager.addEventListener("getFriendListSuccess", idManagerEvent);
+				
+				
+				idManager.register(myAccountId, userRole, netConnection.nearID);
+			}
+			
+			private function placeCall():void
+			{
+				currentState = CallTesting;
+				infoMsg("正在呼叫:"+remoteName);
+				status("Calling " + remoteName + ", id: " + remoteId + "\n");
+				
+				if (remoteId.length != 64)
+				{	
+					status("Invalid remote ID, call failed\n");
+					currentState = CallFailed;
+					return;
+				}
+				
+				netConnection.call(Relay, null, remoteId, p2pTest, myName);
+				//p2ptest
+				p2pCheckTimer = new Timer(1000);
+				p2pCheckTimer.addEventListener(TimerEvent.TIMER, p2pCheckTimerHandler);
+				p2pCheckTimer.start();
+				outgoingStream = new NetStream(netConnection, NetStream.DIRECT_CONNECTIONS);
+				var o:Object = new Object
+				o.onPeerConnect = function(caller:NetStream):Boolean
+				{
+					status("Callee connecting to media stream: " + caller.farID + "\n");
+					p2pSuccess = true;
+					return true; 
+				}
+				outgoingStream.client = o;
+				outgoingStream.publish("media-caller");			
+			}			
+			
+			private function p2pCheckTimerHandler(e:TimerEvent):void
+			{
+				p2pCheckTimer.removeEventListener(TimerEvent.TIMER, p2pCheckTimerHandler);
+				if (p2pSuccess == true)
+				{
+					p2pStream();
+				}
+				else
+				{				
+					fmsStream();
+				}
+				// set volume for incoming stream
+				var st:SoundTransform = new SoundTransform(speakerVolumeSlider.value / 100);
+				incomingStream.soundTransform = st;
+				
+				var i:Object = new Object;
+				i.onIm = function(name:String, text:String):void
+				{
+					textOutput.text += name + ": " + text + "\n";
+				}
+				incomingStream.client = i;
+				
+				remoteVideo = new Video();
+				remoteVideo.width = 320;
+				remoteVideo.height = 240;
+				remoteVideo.attachNetStream(incomingStream);
+				remoteVideoDisplay.addChild(remoteVideo);
+				currentState = CallCalling;
+			}
+			
+			private function p2pStream():void
+			{
+				netConnection.call(Relay, null, remoteId, InviteP2p, myName);
+				// caller publishes media stream
+				outgoingStream = new NetStream(netConnection, NetStream.DIRECT_CONNECTIONS);
+				outgoingStream.addEventListener(NetStatusEvent.NET_STATUS, outgoingStreamHandler);
+				outgoingStream.publish("media-caller");
+				
+				var o:Object = new Object
+				o.onPeerConnect = function(caller:NetStream):Boolean
+				{
+					status("Callee connecting to media stream: " + caller.farID + "\n");
+					
+					return true; 
+				}
+				outgoingStream.client = o;
+				
+				startAudio();					
+				startVideo();
+				
+				// caller subscribes to callee's media stream
+				incomingStream = new NetStream(netConnection, remoteId);
+				incomingStream.addEventListener(NetStatusEvent.NET_STATUS, incomingStreamHandler);
+				incomingStream.play("media-callee");
+			}
+			
+			private function fmsStream():void
+			{
+				netConnection.call(Relay, null, remoteId, InviteFms, myName);
+				// caller publishes media stream
+				outgoingStream = new NetStream(netConnection);
+				outgoingStream.addEventListener(NetStatusEvent.NET_STATUS, outgoingStreamHandler);
+				outgoingStream.publish(myId+"_"+remoteId);				
+				
+				startAudio();					
+				startVideo();
+				
+				// caller subscribes to callee's media stream
+				incomingStream = new NetStream(netConnection);
+				incomingStream.addEventListener(NetStatusEvent.NET_STATUS, incomingStreamHandler);
+				incomingStream.play(remoteId+"_"+myId);
+			}
+			
+			// process successful response from id manager		
+			private function idManagerEvent(e:Event):void
+			{
+				status("ID event: " + e.type + "\n");
+				
+				if (e.type == "registerSuccess")
+				{
+					switch (currentState)
+					{
+						case LoginConnecting:
+							currentState = LoginConnected;
+							break;
+						case LoginDisconnecting:
+						case LoginNotConnected:
+							currentState = LoginNotConnected;
+							return;
+						case LoginConnected:
+							return;
+					}	
+					
+					currentState = CallReady;	
+				}
+				else if (e.type == "getFriendListSuccess")
+				{
+					userList = (e as IdManagerEvent).ac;
+					ul.validateNow();				
+				}
+				else
+				{
+					// all error messages ar IdManagerError type
+					var error:IdManagerError = e as IdManagerError;
+					infoMsg("Error description: " + error.description);
+					status("Error description: " + error.description + "\n");
+					
+					onDisconnect();
+				}
+			}
+			
+			// user clicked accept button
+			private function acceptCall():void
+			{
+				infoMsg("与"+remoteName+"通话中...");
+				stopRing();
+				
+				incomingStream.receiveAudio(true);
+				incomingStream.receiveVideo(true);
+				
+				remoteVideo = new Video();
+				remoteVideo.width = 320;
+				remoteVideo.height = 240;
+				remoteVideo.attachNetStream(incomingStream);
+				remoteVideoDisplay.addChild(remoteVideo);
+				
+				if (currentState == CallP2pRinging)
+				{
+					// callee publishes media
+					outgoingStream = new NetStream(netConnection, NetStream.DIRECT_CONNECTIONS);
+					outgoingStream.addEventListener(NetStatusEvent.NET_STATUS, outgoingStreamHandler);
+					outgoingStream.publish("media-callee");
+					
+					var o:Object = new Object
+					o.onPeerConnect = function(caller:NetStream):Boolean
+					{
+						status("Caller connecting to media stream: " + caller.farID + "\n");
+						
+						return true; 
+					}
+					outgoingStream.client = o;
+				}
+				else if (currentState == CallFmsRinging)
+				{
+					outgoingStream = new NetStream(netConnection);
+					outgoingStream.addEventListener(NetStatusEvent.NET_STATUS, outgoingStreamHandler);
+					outgoingStream.publish(myId+"_"+remoteId);		
+				}
+				
+				netConnection.call(Relay, null, remoteId, Accept, myName);
+				
+				startVideo();
+				startAudio();
+				
+				currentState = CallEstablished;
+			}
+			
+			private function onDisconnect():void
+			{
+				status("Disconnecting.\n");
+				
+				onHangup();
+				
+				if (idManager)
+				{
+					idManager.unregister();
+					idManager = null;
+				}
+				
+				currentState = LoginNotConnected;
+				
+				netConnection.close();
+				netConnection = null;
+			}
+			
+			private function startAudio():void
+			{
+				var mic:Microphone = getMicrophone();
+				if (mic && outgoingStream)
+				{
+					outgoingStream.attachAudio(mic);
+				}
+			}
+			
+			private function startVideo():void
+			{
+				var camera:Camera = Camera.getCamera(cameraIndex.toString());
+				if (camera)
+				{
+					localVideoDisplay.attachCamera(camera);
+					if (outgoingStream)
+					{
+						outgoingStream.attachCamera(camera);
+					}
+				}
+			}
+			
+			// this function is called in every second to update charts, microhone level, and call timer
+			private function onActivityTimer(e:TimerEvent):void
+			{	
+				if (currentState == CallEstablished)
+				{
+					callTimer++;
+					var elapsed:Date = new Date(2008, 4, 12);
+					elapsed.setTime(elapsed.getTime() + callTimer * 1000);
+					var formatter:DateFormatter = new DateFormatter();
+					var format:String = "JJ:NN:SS";
+					if (callTimer < 60)
+					{
+						format = "SS";
+					}
+					else if (callTimer < 60 * 60)
+					{
+						format = "NN:SS";
+					}
+					formatter.formatString = format 
+					callTimerText.text = formatter.format(elapsed);
+				}
+			}
+			
+			private function onDeviceStatus(e:StatusEvent):void
+			{
+				status("Device status: " + e.code + "\n");
+			}
+			
+			private function onDeviceActivity(e:ActivityEvent):void
+			{
+				status("Device activity: " + e.activating + "\n");
+			}
+			
+			private function onHangup():void
+			{
+				infoMsg("");
+				status("Hanging up call\n");
+				
+				// signaling based on state
+				if (CallEstablished == currentState)
+				{
+					netConnection.call(Relay, null, remoteId, Bye, myName);
+				}
+				else if (CallCalling == currentState)
+				{
+					netConnection.call(Relay, null, remoteId, Cancel, myName);	
+				}
+				else if (CallP2pRinging == currentState || CallFmsRinging == currentState)
+				{
+					netConnection.call(Relay, null, remoteId, Reject, myName);	
+				}
+				
+				stopRing();
+				
+				currentState = CallReady;
+				
+				if (incomingStream)
+				{
+					incomingStream.close();
+					incomingStream.removeEventListener(NetStatusEvent.NET_STATUS, incomingStreamHandler);
+				}
+				
+				if (outgoingStream)
+				{
+					outgoingStream.close();
+					outgoingStream.removeEventListener(NetStatusEvent.NET_STATUS, outgoingStreamHandler);
+				}
+				
+				incomingStream = null;
+				outgoingStream = null;			
+				
+				callTimer = 0;
+			}
+			
+			private function getMicrophone():Microphone
+			{
+				
+				return Microphone.getMicrophone(micIndex);
+				
+			}
+			
+			private function speakerVolumeChanged(e:Event):void
+			{
+				if (incomingStream)
+				{
+					var volume:Number = e.target.value / 100;
+					var st:SoundTransform = new SoundTransform(volume);
+					incomingStream.soundTransform = st;
+					
+					status("Setting speaker volume to: " + volume + "\n");
+				}
+			}
+			
+			private function micVolumeChanged(e:Event):void
+			{
+				var mic:Microphone = getMicrophone();
+				if (mic)
+				{
+					mic.gain = e.target.value;
+					
+					status("Setting mic volume to: " + e.target.value + "\n");
+				}
+			}
+			
+			// sending text message
+			private function onSend():void
+			{
+				var msg:String = textInput.text; 
+				if (msg.length != 0 && outgoingStream)
+				{
+					textOutput.text += myName + ": " + msg + "\n";
+					outgoingStream.send("onIm", myName, msg);
+					textInput.text = "";
+				}
+			}
+			
+			private function micChanged(event:Event):void
+			{
+				micIndex = micSelection.selectedIndex;
+				
+				var mic:Microphone = getMicrophone();
+				
+				// set the new microphne values based on UI
+				mic.gain = micVolumeSlider.value;
+				mic.addEventListener(StatusEvent.STATUS, onDeviceStatus);
+				mic.addEventListener(ActivityEvent.ACTIVITY, onDeviceActivity);
+				
+				handleCodecChange();
+				
+				if (currentState == CallEstablished)
+				{	
+					outgoingStream.attachAudio(mic);
+				}
+			}
+			
+			private function cameraChanged(event:Event = null):void
+			{
+				cameraIndex = cameraSelection.selectedIndex;
+				
+				var camera:Camera = Camera.getCamera(cameraIndex.toString());
+				
+				if (camera)
+				{
+					camera.setMode(320, 240, 15);
+					camera.setQuality(0, videoQualitySlider.value);
+				}
+				
+				// when user changes video device, we want to show preview
+				localVideoDisplay.attachCamera(camera);
+				
+				if (currentState == CallEstablished)
+				{	
+					outgoingStream.attachCamera(camera);
+				}
+			}
+			
+			private function videoQualityChanged(e:Event = null):void
+			{
+				var camera:Camera = Camera.getCamera(cameraIndex.toString());
+				if (camera)
+				{
+					camera.setQuality(0, videoQualitySlider.value);
+					status("Setting camera quality to: " + videoQualitySlider.value + "\n");
+				}
+			}
+			
+			private function onAudioMuted():void
+			{
+				
+			}
+			
+			private function onVideoPaused():void
+			{
+				
+			}
+			
+			private function handleCodecChange():void
+			{
+				var mic:Microphone = getMicrophone();
+				if (mic)
+				{	
+					mic.codec = SoundCodec.SPEEX;
+					mic.framesPerPacket = 1;
+					mic.encodeQuality = 6;	
+				}
+			}
+			
+			private function ring():void
+			{				
+				ringer = new Sound();
+				
+				ringer.addEventListener("sampleData", ringTone);
+				ringerChannel = ringer.play();
+			}
+			
+			private function stopRing():void
+			{
+				if (ringerChannel)
+				{
+					ringerChannel.stop();
+					
+					ringer.removeEventListener("sampleData", ringTone);
+					
+					ringer = null;
+					ringerChannel = null;
+				}
+			}
+			
+			private function ringTone(event:SampleDataEvent):void
+			{	
+				for (var c:int=0; c<8192; c++) 
+				{
+					var pos:Number = Number(c + event.position) / Number(6 * 44100);
+					var frac:Number = pos - int(pos);
+					var sample:Number;
+					if (frac < 0.066)
+					{
+						sample = 0.4 * Math.sin(2* Math.PI / (44100/784) * (Number(c + event.position)));
+					}
+					else if (frac < 0.333)
+					{
+						sample = 0.2 * (Math.sin(2* Math.PI / (44100/646) * (Number(c + event.position)))
+							+ Math.sin(2* Math.PI / (44100/672) * (Number(c + event.position)))
+							+ Math.sin(2* Math.PI / (44100/1034) * (Number(c + event.position)))
+							+ Math.sin(2* Math.PI / (44100/1060) * (Number(c + event.position))));
+					}
+					else
+					{
+						sample = 0;	
+					}
+					event.data.writeFloat(sample);
+					event.data.writeFloat(sample);
+				}
+			}
+			
+			protected function ul_selectionChangeHandler(event:GridSelectionEvent):void
+			{
+				if (userRole == 'company')
+				{	
+					userResume.url = userResumeUrl+userList.getItemAt(event.selectionChange.rowIndex)['userId'];
+					nextRemoteName = userList.getItemAt(event.selectionChange.rowIndex)['userName'];
+					nextRemoteId = userList.getItemAt(event.selectionChange.rowIndex)['identity'];
+					//get resume todo
+					Alert.show('确实要开始新的视频通话么？', '提醒', 3, this, confirmToCall);
+					// TODO Auto-generated method stub
+				}
+			}
+			
+			public function confirmToCall(event:CloseEvent):void{
+				if(event.detail == Alert.YES)
+				{
+					userResume.send();
+					onHangup();
+					remoteName = nextRemoteName;
+					remoteId = nextRemoteId;
+					placeCall();
+					
+				}
+			}
+			
+			private function infoMsg(str:String):void{
+				info.text = str;
+				info.validateNow();
+			}
+			
+			private function getUserResume(event:ResultEvent):void
+			{
+				resume.text = event.result.toString();
+			}
+		]]>
+	</fx:Script>
+	
+	<fx:Style>
+		.buttonStyle {
+			color: "0x000000";
+			textRollOverColor: "0x000000";
+			textSelectedColor: "0x000000";
+		}
+		
+		.checkboxStyle
+		{
+			color: "0xffffff";
+			textRollOverColor: "0xffffff";
+			textSelectedColor: "0xffffff";
+		}
+	</fx:Style>
+	
+	<s:states>
+		<s:State name="LoginNotConnected"/>
+		<s:State name="LoginConnecting"/>
+		<s:State name="LoginConnected"/>
+		<s:State name="LoginDisconnecting"/>
+		<s:State name="CallReady"/>
+		<s:State name="CallCalling"/>
+		<s:State name="CallP2pRinging"/>
+		<s:State name="CallEstablished"/>
+		<s:State name="CallFailed"/>
+		<s:State name="CallTesting"/>
+		<s:State name="CallBeTesting"/>
+		<s:State name="CallFmsRinging"/>
+	</s:states>
+	
+	<fx:Declarations>
+		<s:HTTPService id="userResume" result="getUserResume(event)" resultFormat="text"/>		
+	</fx:Declarations>
+	
+	<s:BorderContainer backgroundColor="0x303030" borderStyle="solid" cornerRadius="10"
+					   width="820" height="450">
+		<s:layout>
+			<s:HorizontalLayout paddingBottom="5" paddingLeft="5" paddingRight="5" paddingTop="5"/>
+		</s:layout>
+		<s:VGroup>		
+			<s:HGroup>
+				<s:Label id="info" height="22" color="0xffffff"/>
+				<!--//test-->
+<!--				<s:TextInput id="myAccountIdTxt"
+							 width="40"/>
+				<s:TextInput id="myNameTxt"
+							 width="40"/>
+				<s:TextInput id="userRoleTxt"
+							 width="40"/>-->
+				<!--//test-->
+			</s:HGroup>
+			
+			<s:HGroup includeIn="LoginNotConnected" verticalAlign="middle">
+				<s:Label color="0xffffff"/>
+				<s:Button label="连接" click="onConnect()" styleName="buttonStyle"/>
+			</s:HGroup>	
+			
+			<s:HGroup includeIn="CallP2pRinging,CallFmsRinging" verticalAlign="middle">
+				<s:Label color="0xffffff"/>
+				<s:Button label="接受" click="acceptCall()" styleName="buttonStyle"/>
+				<s:Button label="拒绝" click="onHangup()" styleName="buttonStyle"/>
+			</s:HGroup>
+			
+			<s:HGroup includeIn="CallCalling" verticalAlign="middle">
+				<s:Label color="0xffffff"/>
+				<s:Button label="取消" click="onHangup()" styleName="buttonStyle"/>
+			</s:HGroup>	
+			
+			<s:HGroup includeIn="CallEstablished" verticalAlign="middle">
+				<s:Label color="0xffffff"/>
+				<s:Button label="挂断" click="onHangup()" styleName="buttonStyle"/>
+				<s:Label id="callTimerText" color="0xffffff"/>
+			</s:HGroup>
+
+			<s:HGroup includeIn="CallBeTesting" verticalAlign="middle">
+				<s:Button label="拒绝连接" click="onHangup()"
+						  styleName="buttonStyle"/>
+			</s:HGroup>
+			
+			<s:HGroup includeIn="CallFailed" verticalAlign="middle">
+				<s:Button label="重新呼叫" click="placeCall()"
+						  styleName="buttonStyle"/>
+			</s:HGroup>
+			
+			<s:HGroup includeIn="CallReady,CallTesting,LoginConnected,LoginConnecting,LoginDisconnecting" verticalAlign="middle">
+				<s:Spacer height="21" />
+			</s:HGroup>
+			
+			<s:HGroup>
+				<mx:VideoDisplay id="remoteVideoDisplay" width="320" height="240"/>
+				<s:VGroup>
+					<mx:VideoDisplay id="localVideoDisplay" width="180" height="135"/>
+					<s:HGroup>
+						<s:Label width="56" color="0xffffff" text="Mic:"/>
+						<s:HSlider id="micVolumeSlider" width="120" change="micVolumeChanged(event)"
+								   maximum="100" minimum="0" showDataTip="false"/>
+					</s:HGroup>
+					<s:HGroup>
+						<s:Label width="56" color="0xffffff" text="Speaker:"/>
+						<s:HSlider id="speakerVolumeSlider" width="120"
+								   change="speakerVolumeChanged(event)" maximum="100" minimum="0"
+								   showDataTip="false"/>
+					</s:HGroup>
+					<s:HGroup>
+						<s:Label width="56" color="0xffffff" text="VideoQ:"/>
+						<s:HSlider id="videoQualitySlider" width="120"
+								   change="videoQualityChanged(event)" maximum="100" minimum="0"
+								   showDataTip="false"/>
+					</s:HGroup>
+				</s:VGroup>
+			</s:HGroup>
+			
+			<s:TextArea id="textOutput" width="509" height="100" editable="false"
+						verticalScrollPolicy="auto"/>
+			
+			<s:HGroup>
+				<s:TextInput id="textInput" width="432" enter="onSend()"/>
+				<s:Button label="SEND" click="onSend()"
+						  enabled="{textInput.text.length &gt; 0 &amp;&amp; currentState == CallEstablished}"
+						  styleName="buttonStyle"/>
+			</s:HGroup>
+		</s:VGroup>
+		<s:VGroup>
+			<s:Label height="22" color="0xffffff" text="简历" verticalAlign="bottom"/>
+			<s:TextArea id="resume" width="293" height="241" editable="false"
+						verticalScrollPolicy="auto"/>
+			<s:TabBar width="293" dataProvider="{optionsStack}" styleName="buttonStyle"/>
+			<mx:ViewStack id="optionsStack" borderStyle="solid" creationPolicy="all">	
+				<s:NavigatorContent label="用户列表" color="0xffffff">
+					<s:layout>
+						<s:VerticalLayout/>
+					</s:layout>
+					<s:DataGrid id="ul" width="291" height="95" dataProvider="{userList}"
+								selectionChange="ul_selectionChangeHandler(event)"
+								color="#000000">
+						<s:columns>
+							<s:ArrayList>
+								<s:GridColumn dataField="userId" headerText="id"
+											  sortDescending="true"/>
+								<s:GridColumn dataField="userName" headerText="用户"/>
+								<s:GridColumn visible="false" dataField="identity"/>
+							</s:ArrayList>
+						</s:columns>					
+					</s:DataGrid>
+				</s:NavigatorContent>
+				<s:NavigatorContent label="DEVICES" color="0xffffff"
+									enabled="{currentState != LoginNotConnected}">
+					<s:layout>
+						<s:VerticalLayout paddingLeft="5" paddingTop="5"/>
+					</s:layout>
+					<s:HGroup verticalAlign="middle">
+						<s:Label color="0xffffff" text="Audio capture: "/>
+						<s:ComboBox id="micSelection" change="micChanged(event)" color="black"
+									dataProvider="{micNames}"/>
+					</s:HGroup>
+					<s:HGroup verticalAlign="middle">
+						<s:Label color="0xffffff" text="Video capture: "/>
+						<s:ComboBox id="cameraSelection" change="cameraChanged(event)" color="black"
+									dataProvider="{cameraNames}"/>
+					</s:HGroup>
+				</s:NavigatorContent>
+				<s:NavigatorContent label="STATUS" color="0xffffff">
+					<s:layout>
+						<s:VerticalLayout/>
+					</s:layout>
+					<s:TextArea id="statusArea" width="293" height="67" color="black"
+								editable="false" verticalScrollPolicy="auto"/>
+					<s:Button label="CLEAR" click="statusArea.text=''" styleName="buttonStyle"/>
+				</s:NavigatorContent>
+			</mx:ViewStack>
+		</s:VGroup>
+	</s:BorderContainer>
+</s:Application>

@@ -63,7 +63,7 @@
  	import mx.rpc.events.FaultEvent;
  	import mx.rpc.events.ResultEvent;
  	import mx.rpc.http.HTTPService;
-	import mx.utils.ObjectProxy;
+ 	import mx.utils.ObjectProxy;
 			
  	public class HttpIdManager extends AbstractIdManager
  	{	
@@ -132,6 +132,19 @@
  				mConnectionTimer = null;
  			}	
  		}
+		
+		override protected function doInviteThirdPart(hosterId:String, attenderId:String):void
+		{					
+			if (mHttpService)
+			{
+				var request:Object = new Object();
+				request.taskType = 'inviteCode';
+				request.hosterId = hosterId;
+				request.attenderId = attenderId;
+				mHttpService.cancel();
+				mHttpService.send(request);
+			}
+		}
 		 		
  		// we need to refresh regsitration with web service periodically
 		private function onConnectionTimer(e:TimerEvent):void
@@ -216,6 +229,10 @@
 						d = new IdManagerError("lookupFailure", "HTTP response does not have user property");
  						dispatchEvent(d);
 					}
+				}
+				else if (result.result.hasOwnProperty("inviteCode"))
+				{
+					//nothing				
 				}
 				else
 				{

@@ -19,12 +19,24 @@
  		/**
  		 * Dispatched when user id registartion succeeds.
  		 */
- 		[Event(name="registerSuccess", type="Event")]
+ 		[Event(name="registerSuccess", type="IdManagerEvent2")]
  		
  		/**
  		 * Dispatched when user id registration failed.
  		 */
- 		[Event(name="registerFailure", type="IdManagerError")]	
+ 		[Event(name="registerFailure", type="IdManagerError")]
+ 		
+ 		/**
+ 		 * Dispatched when user lookup failed.
+ 		 */
+ 		[Event(name="lookupFailure", type="IdManagerError")]
+ 		 		
+ 		 /**
+ 		  * Dispatched when user lookup suceeded. The evnt containns both
+ 		  * the user name and id.  This event also dispatched when the user is not,
+ 		  * registered, in this case, the id in the event is empty. 
+ 		  */
+ 		[Event(name="lookupSuccess", type="IdManagerEvent")]
  		
  		/**
  		 * Error during user lookup.
@@ -40,6 +52,14 @@
  		}
  		
  		/**
+ 		 * Lookup remote user id.
+ 		 */
+ 		public function lookup(user:String):void
+ 		{
+ 			doLookup(user);
+ 		}
+ 		
+ 		/**
  		 * Unregister from lookup service 
  		 */ 
  		 public function unregister():void
@@ -48,11 +68,11 @@
  		 }
 		 
 		 /**
-		  * get user list
+		  * Unregister from lookup service 
 		  */ 
-		 public function getUserList(accountId:String, userRole:String):void
+		 public function inviteThirdPart(hosterId:String, attenderId:String):void
 		 {
-			 doGetUserList(accountId, userRole);
+			 doInviteThirdPart(hosterId, attenderId);
 		 }
  		 
  		 /**
@@ -70,12 +90,19 @@
  			dispatchEvent(e);
  		 }
  		 
+ 		 protected function doLookup(user:String):void
+ 		 {
+ 		 	// MUST override, failure by default
+ 			var e:Event = new Event("lookupFailure");
+ 			dispatchEvent(e);
+ 		 }
+ 		 
  		 protected function doUnregister():void
  		 {
  		 	// MUST override
  		 }
 		 
-		 protected function doGetUserList(accountId:String, userRole:String):void
+		 protected function doInviteThirdPart(hosterId:String, attenderId:String):void
 		 {
 			 // MUST override
 		 }

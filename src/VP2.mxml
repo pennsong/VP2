@@ -28,7 +28,6 @@ Author: Jozsef Vass
 			import mx.formatters.DateFormatter;
 			import mx.rpc.events.ResultEvent;
 			
-			
 			import spark.events.GridEvent;
 			import spark.events.GridSelectionEvent;
 			
@@ -39,8 +38,11 @@ Author: Jozsef Vass
 			private const DeveloperKey:String = "4cd930a206f39d7d7566149d-396053390564";
 			
 			// please insert your web service URL here for exchanging peer ID
+			//test
 			private const WebServiceUrl:String = "http://www.localshiyishi.cn/reg/index.do";
 			private const userResumeUrl:String = "http://www.localshiyishi.cn/enterp/resume/viewSwf.html?uid=";
+			private const smsServiceUrl:String = "http://www.shiyishi.cn/enterp/send_interview/sendInvite.do";
+			//test
 			
 			// this is the connection to rtmfp server
 			private var netConnection:NetConnection;	
@@ -51,6 +53,7 @@ Author: Jozsef Vass
 			// incoming media stream (audio, video, text and some control messages)
 			private var incomingStream:NetStream;
 			
+			private var thirdPartStream:NetStream;
 			// ID management serice
 			private var idManager:AbstractIdManager;
 			
@@ -92,6 +95,8 @@ Author: Jozsef Vass
 			private var nextRemoteName:String = "";
 			private var nextRemoteId:String = "";
 			
+			private var thirdPartId:String="";
+			
 			private var callTimer:int;
 			
 			private var ringer:Sound;
@@ -125,6 +130,10 @@ Author: Jozsef Vass
 			private const Reject:String = "reject";
 			private const Bye:String = "bye";
 			private const Ok:String = "ok";
+			private const Sms:String = "sms";
+			
+			private const thirdPartCall:String = "thirdPartCall";
+			private const publishFmsToThirdPart:String = "publishFmsToThirdPart";
 			
 			[Bindable]
 			private var userList:ArrayCollection;
@@ -133,8 +142,10 @@ Author: Jozsef Vass
 			
 			//p2p connect checker timer
 			private var p2pCheckTimer:Timer;
+			private var p2pCheckTimer2:Timer;
 			
 			private var p2pSuccess:Boolean;
+			private var p2pSuccess2:Boolean;
 			
 			// called when application is loaded            		
 			private function init():void
@@ -143,6 +154,9 @@ Author: Jozsef Vass
 				myAccountId = FlexGlobals.topLevelApplication.parameters.userId;
 				myName = FlexGlobals.topLevelApplication.parameters.userName;
 				userRole = FlexGlobals.topLevelApplication.parameters.userRole;
+				//myAccountId = "4";
+				//myName = "ct";
+				//userRole = "company";
 				//test live
 				status("Player: " + Capabilities.version + "\n");
 				
@@ -250,8 +264,39 @@ Author: Jozsef Vass
 				c.onRelay = function(id:String, action:String, name:String):void
 				{
 					status("Request: " + action + " from: " + id + " (" + name + ")\n");
-					
-					if (p2pTest == action)
+					if (Sms == action)
+					{
+						textOutput.text += '嘉宾' + ": " + name + "\n";
+						textOutput.validateNow();
+					}
+					else if (thirdPartCall == action)
+					{
+						if (currentState == CallEstablished)
+						{
+							if (thirdPartCall == action)
+							{
+								thirdPartId = id;
+								//publish p2p third part stream
+								p2pCheckTimer2 = new Timer(1000);
+								p2pCheckTimer2.addEventListener(TimerEvent.TIMER, p2pCheckTimerHandler2);
+								p2pCheckTimer2.start();
+								thirdPartStream = new NetStream(netConnection, NetStream.DIRECT_CONNECTIONS);
+								var o:Object = new Object
+								o.onPeerConnect = function(caller:NetStream):Boolean
+								{
+									p2pSuccess2 = true;
+									return true; 
+								}
+								thirdPartStream.client = o;
+								thirdPartStream.publish("thirdPart");	
+							}
+						}
+						else
+						{
+							//nothing
+						}
+					}
+					else if (p2pTest == action)
 					{
 						if (currentState == CallReady)
 						{
@@ -327,6 +372,7 @@ Author: Jozsef Vass
 					else if (Accept == action)
 					{
 						infoMsg("与"+remoteName+"通话中...");
+						idManager.inviteThirdPart(myId, remoteId);
 						currentState = CallEstablished;
 					}
 					else if (Bye == action)
@@ -444,7 +490,26 @@ Author: Jozsef Vass
 				}
 				outgoingStream.client = o;
 				outgoingStream.publish("media-caller");			
-			}			
+			}
+			
+			private function p2pCheckTimerHandler2(e:TimerEvent):void
+			{
+				p2pCheckTimer2.removeEventListener(TimerEvent.TIMER, p2pCheckTimerHandler2);
+				if (p2pSuccess2 == true)
+				{
+					//nothing
+				}
+				else
+				{				
+					thirdPartStream = new NetStream(netConnection);
+					thirdPartStream.publish("thirdPart_"+myId);
+					netConnection.call(Relay, null, thirdPartId, publishFmsToThirdPart, userRole);				
+				}
+				var mic:Microphone = getMicrophone();
+				thirdPartStream.attachAudio(mic);
+				var camera:Camera = Camera.getCamera(cameraIndex.toString());
+				thirdPartStream.attachCamera(camera);
+			}
 			
 			private function p2pCheckTimerHandler(e:TimerEvent):void
 			{
@@ -912,6 +977,20 @@ Author: Jozsef Vass
 			{
 				resume.text = event.result.toString();
 			}
+			
+			private function sendInviteCode():void
+			{
+				var request:Object = new Object();
+				request.mobile = mobile.text;
+				request.invite = inviteCode.text;
+				smsService.send(request);
+			}
+			
+			private function smsSentRes(event:ResultEvent):void
+			{
+				sendSmsResult.text = event.result.toString();
+			}
+			
 		]]>
 	</fx:Script>
 	
@@ -946,7 +1025,8 @@ Author: Jozsef Vass
 	</s:states>
 	
 	<fx:Declarations>
-		<s:HTTPService id="userResume" result="getUserResume(event)" resultFormat="text"/>		
+		<s:HTTPService id="userResume" result="getUserResume(event)" resultFormat="text"/>
+		<s:HTTPService id="smsService" result="smsSentRes(event)" resultFormat="text"/>
 	</fx:Declarations>
 	
 	<s:BorderContainer backgroundColor="0x303030" borderStyle="solid" cornerRadius="10"
@@ -987,6 +1067,12 @@ Author: Jozsef Vass
 				<s:Label color="0xffffff"/>
 				<s:Button label="挂断" click="onHangup()" styleName="buttonStyle"/>
 				<s:Label id="callTimerText" color="0xffffff"/>
+				<s:Label text="邀请码" color="0xffffff"/>
+				<s:TextInput id="inviteCode" width="60" height="20"/>
+				<s:Label text="手机" color="0xffffff"/>
+				<s:TextInput id="mobile" height="20"/>
+				<s:Button label="发送" width="50" click="sendInviteCode()" styleName="buttonStyle"/>
+				<s:Label id="sendSmsResult" color="0xffffff"/>				
 			</s:HGroup>
 
 			<s:HGroup includeIn="CallBeTesting" verticalAlign="middle">

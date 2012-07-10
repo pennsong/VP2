@@ -25,6 +25,7 @@ Author: Jozsef Vass
 			import mx.controls.Alert;
 			import mx.core.FlexGlobals;
 			import mx.events.CloseEvent;
+			import mx.events.CollectionEvent;
 			import mx.formatters.DateFormatter;
 			import mx.rpc.events.ResultEvent;
 			
@@ -39,8 +40,8 @@ Author: Jozsef Vass
 			
 			// please insert your web service URL here for exchanging peer ID
 			//test
-			private const WebServiceUrl:String = "http://www.localshiyishi.cn/reg/index.do";
-			private const userResumeUrl:String = "http://www.localshiyishi.cn/enterp/resume/viewSwf.html?uid=";
+			private const WebServiceUrl:String = "http://www.shiyishi.cn/reg/index.do";
+			private const userResumeUrl:String = "http://www.shiyishi.cn/enterp/resume/viewSwf.html?uid=";
 			private const smsServiceUrl:String = "http://www.shiyishi.cn/enterp/send_interview/sendInvite.do";
 			//test
 			
@@ -138,6 +139,7 @@ Author: Jozsef Vass
 			[Bindable]
 			private var userList:ArrayCollection;
 			
+			[Bindable]
 			private var userRole:String;
 			
 			//p2p connect checker timer
@@ -158,6 +160,8 @@ Author: Jozsef Vass
 				//myName = "ct";
 				//userRole = "company";
 				//test live
+				
+				smsService.url = smsServiceUrl;
 				status("Player: " + Capabilities.version + "\n");
 				
 				currentState = LoginNotConnected;
@@ -457,6 +461,7 @@ Author: Jozsef Vass
 				idManager.addEventListener("registerFailure", idManagerEvent);
 				idManager.addEventListener("idManagerError", idManagerEvent);
 				idManager.addEventListener("getFriendListSuccess", idManagerEvent);
+				idManager.addEventListener("getInviteCodeSuccess", idManagerEvent);
 				
 				
 				idManager.register(myAccountId, userRole, netConnection.nearID);
@@ -610,6 +615,10 @@ Author: Jozsef Vass
 				{
 					userList = (e as IdManagerEvent).ac;
 					ul.validateNow();				
+				}
+				else if (e.type == "getInviteCodeSuccess")
+				{
+					inviteCode.text = (e as IdManagerEvent).ac.getItemAt(0).toString();
 				}
 				else
 				{
@@ -774,6 +783,11 @@ Author: Jozsef Vass
 				{
 					outgoingStream.close();
 					outgoingStream.removeEventListener(NetStatusEvent.NET_STATUS, outgoingStreamHandler);
+				}
+				
+				if (thirdPartStream)
+				{
+					thirdPartStream.close();
 				}
 				
 				incomingStream = null;
@@ -1067,12 +1081,14 @@ Author: Jozsef Vass
 				<s:Label color="0xffffff"/>
 				<s:Button label="挂断" click="onHangup()" styleName="buttonStyle"/>
 				<s:Label id="callTimerText" color="0xffffff"/>
-				<s:Label text="邀请码" color="0xffffff"/>
-				<s:TextInput id="inviteCode" width="60" height="20"/>
-				<s:Label text="手机" color="0xffffff"/>
-				<s:TextInput id="mobile" height="20"/>
-				<s:Button label="发送" width="50" click="sendInviteCode()" styleName="buttonStyle"/>
-				<s:Label id="sendSmsResult" color="0xffffff"/>				
+				<s:HGroup visible="{userRole == 'company'}">
+					<s:Label text="邀请码" color="0xffffff"/>
+					<s:TextInput id="inviteCode" width="60" height="20"/>
+					<s:Label text="手机" color="0xffffff"/>
+					<s:TextInput id="mobile" height="20"/>
+					<s:Button label="发送" width="50" click="sendInviteCode()" styleName="buttonStyle"/>
+					<s:Label id="sendSmsResult" color="0xffffff"/>		
+				</s:HGroup>
 			</s:HGroup>
 
 			<s:HGroup includeIn="CallBeTesting" verticalAlign="middle">
@@ -1094,18 +1110,18 @@ Author: Jozsef Vass
 				<s:VGroup>
 					<mx:VideoDisplay id="localVideoDisplay" width="180" height="135"/>
 					<s:HGroup>
-						<s:Label width="56" color="0xffffff" text="Mic:"/>
+						<s:Label width="56" color="0xffffff" text="话筒:"/>
 						<s:HSlider id="micVolumeSlider" width="120" change="micVolumeChanged(event)"
 								   maximum="100" minimum="0" showDataTip="false"/>
 					</s:HGroup>
 					<s:HGroup>
-						<s:Label width="56" color="0xffffff" text="Speaker:"/>
+						<s:Label width="56" color="0xffffff" text="音箱:"/>
 						<s:HSlider id="speakerVolumeSlider" width="120"
 								   change="speakerVolumeChanged(event)" maximum="100" minimum="0"
 								   showDataTip="false"/>
 					</s:HGroup>
 					<s:HGroup>
-						<s:Label width="56" color="0xffffff" text="VideoQ:"/>
+						<s:Label width="56" color="0xffffff" text="视频质量:"/>
 						<s:HSlider id="videoQualitySlider" width="120"
 								   change="videoQualityChanged(event)" maximum="100" minimum="0"
 								   showDataTip="false"/>
@@ -1118,15 +1134,18 @@ Author: Jozsef Vass
 			
 			<s:HGroup>
 				<s:TextInput id="textInput" width="432" enter="onSend()"/>
-				<s:Button label="SEND" click="onSend()"
+				<s:Button label="发送" click="onSend()"
 						  enabled="{textInput.text.length &gt; 0 &amp;&amp; currentState == CallEstablished}"
 						  styleName="buttonStyle"/>
 			</s:HGroup>
 		</s:VGroup>
 		<s:VGroup>
-			<s:Label height="22" color="0xffffff" text="简历" verticalAlign="bottom"/>
-			<s:TextArea id="resume" width="293" height="241" editable="false"
-						verticalScrollPolicy="auto"/>
+			<s:VGroup visible="{userRole == 'company'}">				
+				<s:Label height="22" color="0xffffff" text="简历" verticalAlign="bottom"/>
+				<s:TextArea id="resume" width="293" height="241" editable="false"
+							verticalScrollPolicy="auto"/>
+			</s:VGroup>
+			
 			<s:TabBar width="293" dataProvider="{optionsStack}" styleName="buttonStyle"/>
 			<mx:ViewStack id="optionsStack" borderStyle="solid" creationPolicy="all">	
 				<s:NavigatorContent label="用户列表" color="0xffffff">
@@ -1146,29 +1165,29 @@ Author: Jozsef Vass
 						</s:columns>					
 					</s:DataGrid>
 				</s:NavigatorContent>
-				<s:NavigatorContent label="DEVICES" color="0xffffff"
+				<s:NavigatorContent label="摄像头/话筒" color="0xffffff"
 									enabled="{currentState != LoginNotConnected}">
 					<s:layout>
 						<s:VerticalLayout paddingLeft="5" paddingTop="5"/>
 					</s:layout>
 					<s:HGroup verticalAlign="middle">
-						<s:Label color="0xffffff" text="Audio capture: "/>
+						<s:Label color="0xffffff" text="话筒: "/>
 						<s:ComboBox id="micSelection" change="micChanged(event)" color="black"
 									dataProvider="{micNames}"/>
 					</s:HGroup>
 					<s:HGroup verticalAlign="middle">
-						<s:Label color="0xffffff" text="Video capture: "/>
+						<s:Label color="0xffffff" text="摄像头: "/>
 						<s:ComboBox id="cameraSelection" change="cameraChanged(event)" color="black"
 									dataProvider="{cameraNames}"/>
 					</s:HGroup>
 				</s:NavigatorContent>
-				<s:NavigatorContent label="STATUS" color="0xffffff">
+				<s:NavigatorContent label="统计" color="0xffffff">
 					<s:layout>
 						<s:VerticalLayout/>
 					</s:layout>
 					<s:TextArea id="statusArea" width="293" height="67" color="black"
 								editable="false" verticalScrollPolicy="auto"/>
-					<s:Button label="CLEAR" click="statusArea.text=''" styleName="buttonStyle"/>
+					<s:Button label="清除" click="statusArea.text=''" styleName="buttonStyle"/>
 				</s:NavigatorContent>
 			</mx:ViewStack>
 		</s:VGroup>

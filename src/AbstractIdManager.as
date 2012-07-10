@@ -16,10 +16,15 @@
  	
  	public class AbstractIdManager extends EventDispatcher
  	{
- 		/**
+		/**
+		 * Dispatched when user id registartion succeeds.
+		 */
+		[Event(name="getInviteCodeSuccess", type="IdManagerEvent")]
+		
+		/**
  		 * Dispatched when user id registartion succeeds.
  		 */
- 		[Event(name="registerSuccess", type="IdManagerEvent2")]
+ 		[Event(name="registerSuccess", type="IdManagerEvent")]
  		
  		/**
  		 * Dispatched when user id registration failed.
@@ -68,7 +73,7 @@
  		 }
 		 
 		 /**
-		  * Unregister from lookup service 
+		  * get invite code
 		  */ 
 		 public function inviteThirdPart(hosterId:String, attenderId:String):void
 		 {

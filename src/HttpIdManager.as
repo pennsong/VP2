@@ -232,7 +232,10 @@
 				}
 				else if (result.result.hasOwnProperty("inviteCode"))
 				{
-					//nothing				
+					var userList2:ArrayCollection = new ArrayCollection();
+					userList2.addItem(result.result.inviteCode);
+					var r2:IdManagerEvent = new IdManagerEvent("getInviteCodeSuccess", null, null, userList2);
+					dispatchEvent(r2);
 				}
 				else
 				{

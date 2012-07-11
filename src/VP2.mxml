@@ -33,7 +33,10 @@ Author: Jozsef Vass
 			import spark.events.GridSelectionEvent;
 			
 			// rtmfp server address (Adobe Cirrus or FMS)
-			[Bindable] private var connectUrl:String = "rtmfp://210.51.38.12/cr";
+			//test
+			//[Bindable] private var connectUrl:String = "rtmfp://210.51.38.12/cr";
+			[Bindable] private var connectUrl:String = "rtmfp://180.169.20.22/cr";
+			//test
 			
 			// developer key, please insert your developer key here
 			private const DeveloperKey:String = "4cd930a206f39d7d7566149d-396053390564";
@@ -156,9 +159,9 @@ Author: Jozsef Vass
 				myAccountId = FlexGlobals.topLevelApplication.parameters.userId;
 				myName = FlexGlobals.topLevelApplication.parameters.userName;
 				userRole = FlexGlobals.topLevelApplication.parameters.userRole;
-				//myAccountId = "4";
-				//myName = "ct";
-				//userRole = "company";
+				//myAccountId = "22";
+				//myName = "b";
+				//userRole = "talent";
 				//test live
 				
 				smsService.url = smsServiceUrl;
@@ -279,6 +282,10 @@ Author: Jozsef Vass
 						{
 							if (thirdPartCall == action)
 							{
+								if (thirdPartStream)
+								{
+									thirdPartStream.close();
+								}
 								thirdPartId = id;
 								//publish p2p third part stream
 								p2pCheckTimer2 = new Timer(1000);
@@ -288,7 +295,9 @@ Author: Jozsef Vass
 								var o:Object = new Object
 								o.onPeerConnect = function(caller:NetStream):Boolean
 								{
+									//test live should be true
 									p2pSuccess2 = true;
+									//test
 									return true; 
 								}
 								thirdPartStream.client = o;
@@ -490,7 +499,9 @@ Author: Jozsef Vass
 				o.onPeerConnect = function(caller:NetStream):Boolean
 				{
 					status("Callee connecting to media stream: " + caller.farID + "\n");
+					//test live should be true
 					p2pSuccess = true;
+					//test
 					return true; 
 				}
 				outgoingStream.client = o;
@@ -499,13 +510,18 @@ Author: Jozsef Vass
 			
 			private function p2pCheckTimerHandler2(e:TimerEvent):void
 			{
+				p2pCheckTimer2.stop();
 				p2pCheckTimer2.removeEventListener(TimerEvent.TIMER, p2pCheckTimerHandler2);
 				if (p2pSuccess2 == true)
 				{
 					//nothing
 				}
 				else
-				{				
+				{
+					if (thirdPartStream)
+					{
+						thirdPartStream.close();
+					}
 					thirdPartStream = new NetStream(netConnection);
 					thirdPartStream.publish("thirdPart_"+myId);
 					netConnection.call(Relay, null, thirdPartId, publishFmsToThirdPart, userRole);				
@@ -518,6 +534,7 @@ Author: Jozsef Vass
 			
 			private function p2pCheckTimerHandler(e:TimerEvent):void
 			{
+				p2pCheckTimer.stop();
 				p2pCheckTimer.removeEventListener(TimerEvent.TIMER, p2pCheckTimerHandler);
 				if (p2pSuccess == true)
 				{

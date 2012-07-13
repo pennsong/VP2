@@ -273,7 +273,7 @@ Author: Jozsef Vass
 					status("Request: " + action + " from: " + id + " (" + name + ")\n");
 					if (Sms == action)
 					{
-						textOutputDisplay('嘉宾' + ": " + name);
+						textOutputDisplay(name);
 					}
 					else if (thirdPartCall == action)
 					{
@@ -311,13 +311,6 @@ Author: Jozsef Vass
 									// set volume for incoming stream
 									var st2:SoundTransform = new SoundTransform(speakerVolumeSlider.value / 100);
 									incomingStream.soundTransform = st2;
-									
- 									var i2:Object = new Object;
-									i2.onIm = function(name:String, text:String):void
-									{
-										textOutputDisplay(name + ":318: " + text);
-									}
-									incomingStream.client = i2; 
 									
 									remoteVideo = new Video();
 									remoteVideo.width = 320;
@@ -380,13 +373,7 @@ Author: Jozsef Vass
 							incomingStream.receiveAudio(false);
 							incomingStream.receiveVideo(false);
 							
-							var i:Object = new Object;
-							
-							i.onIm = function(name:String, text:String):void
-							{
-								textOutputDisplay(name + ":387:" + text);
-							}
-							incomingStream.client = i;
+
 							
 							remoteName = name;
 							remoteId = id;
@@ -523,7 +510,7 @@ Author: Jozsef Vass
 				{
 					status("Callee connecting to media stream: " + caller.farID + "\n");
 					//test live should be true
-					p2pSuccess = false;
+					p2pSuccess = true;
 					//test
 					return true; 
 				}
@@ -571,12 +558,7 @@ Author: Jozsef Vass
 				var st:SoundTransform = new SoundTransform(speakerVolumeSlider.value / 100);
 				incomingStream.soundTransform = st;
 				
-				var i:Object = new Object;
-				i.onIm = function(name:String, text:String):void
-				{
-					textOutputDisplay(name + ":577:" + text);
-				}
-				incomingStream.client = i;
+
 				
 				remoteVideo = new Video();
 				remoteVideo.width = 320;
@@ -873,7 +855,7 @@ Author: Jozsef Vass
 				if (msg.length != 0 && outgoingStream)
 				{
 					textOutputDisplay(myName + ": " + msg);
-					outgoingStream.send("onIm", myName, msg);
+					netConnection.call(Relay, null, remoteId, Sms, myName+":"+msg);
 					textInput.text = "";
 				}
 			}

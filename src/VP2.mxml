@@ -34,8 +34,8 @@ Author: Jozsef Vass
 			
 			// rtmfp server address (Adobe Cirrus or FMS)
 			//test
-			//[Bindable] private var connectUrl:String = "rtmfp://210.51.38.12/cr";
-			[Bindable] private var connectUrl:String = "rtmfp://180.169.20.22/cr";
+			[Bindable] private var connectUrl:String = "rtmfp://210.51.38.12/cr";
+			//[Bindable] private var connectUrl:String = "rtmfp://180.169.20.22/cr";
 			//test
 			
 			// developer key, please insert your developer key here
@@ -273,8 +273,7 @@ Author: Jozsef Vass
 					status("Request: " + action + " from: " + id + " (" + name + ")\n");
 					if (Sms == action)
 					{
-						textOutput.text += '嘉宾' + ": " + name + "\n";
-						textOutput.validateNow();
+						textOutputDisplay('嘉宾' + ": " + name);
 					}
 					else if (thirdPartCall == action)
 					{
@@ -288,6 +287,7 @@ Author: Jozsef Vass
 								}
 								thirdPartId = id;
 								//publish p2p third part stream
+								p2pSuccess2 = false;
 								p2pCheckTimer2 = new Timer(1000);
 								p2pCheckTimer2.addEventListener(TimerEvent.TIMER, p2pCheckTimerHandler2);
 								p2pCheckTimer2.start();
@@ -302,6 +302,29 @@ Author: Jozsef Vass
 								}
 								thirdPartStream.client = o;
 								thirdPartStream.publish("thirdPart");	
+								if (!p2pSuccess)
+								{//solve direct stream affact previous fms stream problem
+									incomingStream = new NetStream(netConnection);
+									incomingStream.addEventListener(NetStatusEvent.NET_STATUS, incomingStreamHandler);
+									incomingStream.play(remoteId+"_"+myId);
+
+									// set volume for incoming stream
+									var st2:SoundTransform = new SoundTransform(speakerVolumeSlider.value / 100);
+									incomingStream.soundTransform = st2;
+									
+ 									var i2:Object = new Object;
+									i2.onIm = function(name:String, text:String):void
+									{
+										textOutputDisplay(name + ":318: " + text);
+									}
+									incomingStream.client = i2; 
+									
+									remoteVideo = new Video();
+									remoteVideo.width = 320;
+									remoteVideo.height = 240;
+									remoteVideo.attachNetStream(incomingStream);
+									remoteVideoDisplay.addChild(remoteVideo);
+								}
 							}
 						}
 						else
@@ -361,8 +384,7 @@ Author: Jozsef Vass
 							
 							i.onIm = function(name:String, text:String):void
 							{
-								textOutput.text += name + ": " + text + "\n";
-								textOutput.validateNow();
+								textOutputDisplay(name + ":387:" + text);
 							}
 							incomingStream.client = i;
 							
@@ -491,6 +513,7 @@ Author: Jozsef Vass
 				
 				netConnection.call(Relay, null, remoteId, p2pTest, myName);
 				//p2ptest
+				p2pSuccess = false;
 				p2pCheckTimer = new Timer(1000);
 				p2pCheckTimer.addEventListener(TimerEvent.TIMER, p2pCheckTimerHandler);
 				p2pCheckTimer.start();
@@ -500,7 +523,7 @@ Author: Jozsef Vass
 				{
 					status("Callee connecting to media stream: " + caller.farID + "\n");
 					//test live should be true
-					p2pSuccess = true;
+					p2pSuccess = false;
 					//test
 					return true; 
 				}
@@ -551,7 +574,7 @@ Author: Jozsef Vass
 				var i:Object = new Object;
 				i.onIm = function(name:String, text:String):void
 				{
-					textOutput.text += name + ": " + text + "\n";
+					textOutputDisplay(name + ":577:" + text);
 				}
 				incomingStream.client = i;
 				
@@ -849,7 +872,7 @@ Author: Jozsef Vass
 				var msg:String = textInput.text; 
 				if (msg.length != 0 && outgoingStream)
 				{
-					textOutput.text += myName + ": " + msg + "\n";
+					textOutputDisplay(myName + ": " + msg);
 					outgoingStream.send("onIm", myName, msg);
 					textInput.text = "";
 				}
@@ -1022,6 +1045,12 @@ Author: Jozsef Vass
 				sendSmsResult.text = event.result.toString();
 			}
 			
+			private function textOutputDisplay(str:String):void
+			{
+				textOutput.text += str + "\n";
+				textOutput.validateNow();
+				textOutput.verticalScrollPosition = textOutput.maxVerticalScrollPosition;
+			}
 		]]>
 	</fx:Script>
 	
@@ -1146,7 +1175,7 @@ Author: Jozsef Vass
 				</s:VGroup>
 			</s:HGroup>
 			
-			<s:TextArea id="textOutput" width="509" height="100" editable="false"
+			<mx:TextArea id="textOutput" width="509" height="100" editable="false"
 						verticalScrollPolicy="auto"/>
 			
 			<s:HGroup>

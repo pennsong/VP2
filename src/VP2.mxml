@@ -15,7 +15,8 @@ Author: Jozsef Vass
 <s:Application xmlns:fx="http://ns.adobe.com/mxml/2009"
 			   xmlns:s="library://ns.adobe.com/flex/spark"
 			   xmlns:mx="library://ns.adobe.com/flex/mx"
-			   width="820" height="450" backgroundColor="0xffffff" creationComplete="init()">
+			   width="820" height="450" backgroundColor="0xffffff" creationComplete="init()"
+			   preloader="com.riagora.loader.Preloader">
 	<fx:Script>
 		<![CDATA[
 			import flash.events.SampleDataEvent;

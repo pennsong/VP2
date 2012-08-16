@@ -33,21 +33,20 @@ Author: Jozsef Vass
 			import spark.events.GridEvent;
 			import spark.events.GridSelectionEvent;
 			
+			//testing switch setting
+			private var test:Boolean = true;
 			// rtmfp server address (Adobe Cirrus or FMS)
-			//test
-			[Bindable] private var connectUrl:String = "rtmfp://210.51.38.12/cr";
-			//[Bindable] private var connectUrl:String = "rtmfp://180.169.20.22/cr";
-			//test
+
+			[Bindable] private var connectUrl:String;
+			
 			
 			// developer key, please insert your developer key here
 			private const DeveloperKey:String = "4cd930a206f39d7d7566149d-396053390564";
 			
 			// please insert your web service URL here for exchanging peer ID
-			//test
-			private const WebServiceUrl:String = "http://www.shiyishi.cn/reg/index.do";
-			private const userResumeUrl:String = "http://www.shiyishi.cn/enterp/resume/viewSwf.html?uid=";
-			private const smsServiceUrl:String = "http://www.shiyishi.cn/enterp/send_interview/sendInvite.do";
-			//test
+			private var WebServiceUrl:String;
+			private var userResumeUrl:String;
+			private var smsServiceUrl:String;
 			
 			// this is the connection to rtmfp server
 			private var netConnection:NetConnection;	
@@ -156,14 +155,35 @@ Author: Jozsef Vass
 			// called when application is loaded            		
 			private function init():void
 			{
-				//test live
-				myAccountId = FlexGlobals.topLevelApplication.parameters.userId;
-				myName = FlexGlobals.topLevelApplication.parameters.userName;
-				userRole = FlexGlobals.topLevelApplication.parameters.userRole;
-				//myAccountId = "22";
-				//myName = "b";
-				//userRole = "talent";
-				//test live
+				//test case
+				if (test == true)
+				{
+					connectUrl = "rtmfp://112.65.246.54/cr";
+					WebServiceUrl = "http://www.localshiyishi.cn/reg/index.do";
+					userResumeUrl = "http://www.localshiyishi.cn/enterp/resume/viewSwf.html?uid=";
+					smsServiceUrl = "http://www.localshiyishi.cn/enterp/send_interview/sendInvite.do";
+					
+					myAccountId = FlexGlobals.topLevelApplication.parameters.userId;
+					myName = FlexGlobals.topLevelApplication.parameters.userName;
+					userRole = FlexGlobals.topLevelApplication.parameters.userRole;
+					//myAccountId = "22";
+					//myName = "b";
+					//userRole = "talent";
+				}
+				//live case
+				else
+				{
+					connectUrl = "rtmfp://210.51.38.12/cr"
+					WebServiceUrl = "http://www.shiyishi.cn/reg/index.do";
+					userResumeUrl = "http://www.shiyishi.cn/enterp/resume/viewSwf.html?uid=";
+					smsServiceUrl = "http://www.shiyishi.cn/enterp/send_interview/sendInvite.do";
+					
+					myAccountId = FlexGlobals.topLevelApplication.parameters.userId;
+					myName = FlexGlobals.topLevelApplication.parameters.userName;
+					userRole = FlexGlobals.topLevelApplication.parameters.userRole;
+				}
+				
+
 				
 				smsService.url = smsServiceUrl;
 				status("Player: " + Capabilities.version + "\n");
@@ -241,9 +261,7 @@ Author: Jozsef Vass
 					
 					cameraChanged();
 				}
-				//test live
 				onConnect();
-				//test live
 			}
 			
 			private function status(msg:String):void

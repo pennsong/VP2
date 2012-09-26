@@ -135,6 +135,7 @@ Author: Jozsef Vass
 			private const Bye:String = "bye";
 			private const Ok:String = "ok";
 			private const Sms:String = "sms";
+			private const Resume:String = "resume";			
 			
 			private const thirdPartCall:String = "thirdPartCall";
 			private const publishFmsToThirdPart:String = "publishFmsToThirdPart";
@@ -290,7 +291,11 @@ Author: Jozsef Vass
 				c.onRelay = function(id:String, action:String, name:String):void
 				{
 					status("Request: " + action + " from: " + id + " (" + name + ")\n");
-					if (Sms == action)
+					if (Resume == action)
+					{
+						netConnection.call(Relay, null, id, Resume, resume.text);
+					}
+					else if (Sms == action)
 					{
 						textOutputDisplay(name);
 					}

@@ -935,8 +935,8 @@ Author: Jozsef Vass
 				var msg:String = textInput2.text; 
 				if (msg.length != 0)
 				{
-					textOutput2.text += '主考官 to ' + speakTo.text + ": " + msg + "\n";
-					textInput.text = "";
+					textOutputDisplay2('主考官 to ' + speakTo.text + ": " + msg);
+					textInput2.text = "";
 				}
 			}
 			
@@ -1123,7 +1123,7 @@ Author: Jozsef Vass
 			{
 				textOutput2.text += str + "\n";
 				textOutput2.validateNow();
-				textOutput2.verticalScrollPosition = textOutput.maxVerticalScrollPosition;
+				textOutput2.verticalScrollPosition = textOutput2.maxVerticalScrollPosition;
 			}
 			
 		]]>

@@ -15,12 +15,13 @@ Author: Jozsef Vass
 <s:Application xmlns:fx="http://ns.adobe.com/mxml/2009"
 			   xmlns:s="library://ns.adobe.com/flex/spark"
 			   xmlns:mx="library://ns.adobe.com/flex/mx"
-			   width="820" height="450" backgroundColor="0xffffff" creationComplete="init()"
+			   width="820" height="572" backgroundColor="0xffffff" creationComplete="init()"
 			   preloader="com.riagora.loader.Preloader">
 	<fx:Script>
 		<![CDATA[
 			import flash.events.SampleDataEvent;
 			
+			import mx.utils.ObjectProxy;
 			import mx.collections.ArrayCollection;
 			import mx.collections.ArrayList;
 			import mx.controls.Alert;
@@ -34,7 +35,7 @@ Author: Jozsef Vass
 			import spark.events.GridSelectionEvent;
 			
 			//testing switch setting
-			private var test:Boolean = true;
+			private var test:Boolean = false;
 			// rtmfp server address (Adobe Cirrus or FMS)
 
 			[Bindable] private var connectUrl:String;
@@ -135,14 +136,18 @@ Author: Jozsef Vass
 			private const Bye:String = "bye";
 			private const Ok:String = "ok";
 			private const Sms:String = "sms";
-			private const Resume:String = "resume";			
+			private const Resume:String = "resume";		
+			private const sendSms:String = "sendSms";
+			private const getSms:String = "getSms";
 			
 			private const thirdPartCall:String = "thirdPartCall";
 			private const publishFmsToThirdPart:String = "publishFmsToThirdPart";
 			
 			[Bindable]
 			private var userList:ArrayCollection;
-			
+			[Bindable]
+			private var userList2:ArrayCollection;
+						
 			[Bindable]
 			private var userRole:String;
 			
@@ -163,6 +168,7 @@ Author: Jozsef Vass
 					WebServiceUrl = "http://www.localshiyishi.cn/reg/index.do";
 					userResumeUrl = "http://www.localshiyishi.cn/enterp/resume/viewSwf.html?uid=";
 					smsServiceUrl = "http://www.localshiyishi.cn/enterp/send_interview/sendInvite.do";
+					thirdPartyList.url = WebServiceUrl;
 					
 					myAccountId = FlexGlobals.topLevelApplication.parameters.userId;
 					myName = FlexGlobals.topLevelApplication.parameters.userName;
@@ -178,6 +184,7 @@ Author: Jozsef Vass
 					WebServiceUrl = "http://www.shiyishi.cn/reg/index.do";
 					userResumeUrl = "http://www.shiyishi.cn/enterp/resume/viewSwf.html?uid=";
 					smsServiceUrl = "http://www.shiyishi.cn/enterp/send_interview/sendInvite.do";
+					thirdPartyList.url = WebServiceUrl;
 					
 					myAccountId = FlexGlobals.topLevelApplication.parameters.userId;
 					myName = FlexGlobals.topLevelApplication.parameters.userName;
@@ -265,6 +272,29 @@ Author: Jozsef Vass
 				onConnect();
 			}
 			
+			private function getThirdPartyList():void
+			{
+				if (thirdPartyList.lastResult.result.hasOwnProperty("user"))
+				{
+					var remote:Object = thirdPartyList.lastResult.result as Object;
+					
+					var record:* = remote.user;
+					var tmpUserList:ArrayCollection = new ArrayCollection();
+					if (record is ArrayCollection) {
+						for (var i:int=0; i< record.length; i++)
+						{
+							tmpUserList.addItem(record[i]);
+						}
+					} 
+					else if (record is ObjectProxy)
+					{
+						tmpUserList.addItem(record);
+					}
+					userList2 = tmpUserList;
+					ul.validateNow();	
+				}
+			}
+			
 			private function status(msg:String):void
 			{
 				statusArea.text += msg;
@@ -291,7 +321,15 @@ Author: Jozsef Vass
 				c.onRelay = function(id:String, action:String, name:String):void
 				{
 					status("Request: " + action + " from: " + id + " (" + name + ")\n");
-					if (Resume == action)
+					if (sendSms == action)
+					{
+						textOutputDisplay2(name);	
+					}
+					else if (getSms == action)
+					{
+						netConnection.call(Relay, null, id, getSms, textOutput2.text);
+					}
+					else if (Resume == action)
 					{
 						netConnection.call(Relay, null, id, Resume, resume.text);
 					}
@@ -783,6 +821,13 @@ Author: Jozsef Vass
 					}
 					formatter.formatString = format 
 					callTimerText.text = formatter.format(elapsed);
+					//get third party list
+					if (callTimer % 10 == 0)
+					{
+					var request:Object = new Object();
+					request.taskType = 'getThirdPartyList';
+					thirdPartyList.send(request);	
+					}
 				}
 			}
 			
@@ -880,6 +925,17 @@ Author: Jozsef Vass
 				{
 					textOutputDisplay(myName + ": " + msg);
 					netConnection.call(Relay, null, remoteId, Sms, myName+":"+msg);
+					textInput.text = "";
+				}
+			}
+			
+			//send 嘉宾 message
+			private function onSend2():void
+			{
+				var msg:String = textInput2.text; 
+				if (msg.length != 0)
+				{
+					textOutput2.text += '主考官 to ' + speakTo.text + ": " + msg + "\n";
 					textInput.text = "";
 				}
 			}
@@ -1016,6 +1072,11 @@ Author: Jozsef Vass
 				}
 			}
 			
+			protected function ul2_selectionChangeHandler(event:GridSelectionEvent):void
+			{
+				speakTo.text = userList2.getItemAt(event.selectionChange.rowIndex)['userName'];
+			}
+			
 			public function confirmToCall(event:CloseEvent):void{
 				if(event.detail == Alert.YES)
 				{
@@ -1057,6 +1118,14 @@ Author: Jozsef Vass
 				textOutput.validateNow();
 				textOutput.verticalScrollPosition = textOutput.maxVerticalScrollPosition;
 			}
+			
+			private function textOutputDisplay2(str:String):void
+			{
+				textOutput2.text += str + "\n";
+				textOutput2.validateNow();
+				textOutput2.verticalScrollPosition = textOutput.maxVerticalScrollPosition;
+			}
+			
 		]]>
 	</fx:Script>
 	
@@ -1093,10 +1162,11 @@ Author: Jozsef Vass
 	<fx:Declarations>
 		<s:HTTPService id="userResume" result="getUserResume(event)" resultFormat="text"/>
 		<s:HTTPService id="smsService" result="smsSentRes(event)" resultFormat="text"/>
+		<s:HTTPService id="thirdPartyList" result="getThirdPartyList()"/>
 	</fx:Declarations>
 	
-	<s:BorderContainer backgroundColor="0x303030" borderStyle="solid" cornerRadius="10"
-					   width="820" height="450">
+	<s:BorderContainer width="820" height="571" backgroundColor="0x303030" borderStyle="solid"
+					   cornerRadius="10">
 		<s:layout>
 			<s:HorizontalLayout paddingBottom="5" paddingLeft="5" paddingRight="5" paddingTop="5"/>
 		</s:layout>
@@ -1190,12 +1260,37 @@ Author: Jozsef Vass
 						  enabled="{textInput.text.length &gt; 0 &amp;&amp; currentState == CallEstablished}"
 						  styleName="buttonStyle"/>
 			</s:HGroup>
+			<s:HGroup visible="{userRole == 'company'}">
+				<mx:TextArea id="textOutput2" height="100" editable="false"
+							 verticalScrollPolicy="auto"
+							 width="380"/>
+				<s:DataGrid id="ul2" width="119" height="100" dataProvider="{userList2}"
+							selectionChange="ul2_selectionChangeHandler(event)"
+							color="#000000">
+					<s:columns>
+						<s:ArrayList>
+							<s:GridColumn dataField="userName" headerText="嘉宾用户"/>
+						</s:ArrayList>
+					</s:columns>					
+				</s:DataGrid>
+				
+			</s:HGroup>
+			
+			
+			<s:HGroup visible="{userRole == 'company'}">
+				<s:Label id="speakTo" width="50" color="0xffffff" text="" verticalAlign="bottom"/>
+				<s:TextInput id="textInput2" enter="onSend2()"
+							 width="373"/>
+				<s:Button label="发送" click="onSend2()" enabled="{textInput2.text.length &gt; 0}"
+						  styleName="buttonStyle"/>
+			</s:HGroup>
 		</s:VGroup>
 		<s:VGroup>
 			<s:VGroup visible="{userRole == 'company'}">				
 				<s:Label height="22" color="0xffffff" text="简历" verticalAlign="bottom"/>
-				<s:TextArea id="resume" width="293" height="241" editable="false"
-							verticalScrollPolicy="auto"/>
+				<s:TextArea id="resume" width="293" editable="false"
+							verticalScrollPolicy="auto"
+							height="400"/>
 			</s:VGroup>
 			
 			<s:TabBar width="293" dataProvider="{optionsStack}" styleName="buttonStyle"/>

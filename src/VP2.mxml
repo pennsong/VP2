@@ -21,7 +21,6 @@ Author: Jozsef Vass
 		<![CDATA[
 			import flash.events.SampleDataEvent;
 			
-			import mx.utils.ObjectProxy;
 			import mx.collections.ArrayCollection;
 			import mx.collections.ArrayList;
 			import mx.controls.Alert;
@@ -30,12 +29,13 @@ Author: Jozsef Vass
 			import mx.events.CollectionEvent;
 			import mx.formatters.DateFormatter;
 			import mx.rpc.events.ResultEvent;
+			import mx.utils.ObjectProxy;
 			
 			import spark.events.GridEvent;
 			import spark.events.GridSelectionEvent;
 			
 			//testing switch setting
-			private var test:Boolean = false;
+			private var test:Boolean = true;
 			// rtmfp server address (Adobe Cirrus or FMS)
 
 			[Bindable] private var connectUrl:String;
@@ -48,6 +48,7 @@ Author: Jozsef Vass
 			private var WebServiceUrl:String;
 			private var userResumeUrl:String;
 			private var smsServiceUrl:String;
+			private var jobTitleUrl:String;
 			
 			// this is the connection to rtmfp server
 			private var netConnection:NetConnection;	
@@ -151,12 +152,15 @@ Author: Jozsef Vass
 			[Bindable]
 			private var userRole:String;
 			
+			private var roomId:int;
 			//p2p connect checker timer
 			private var p2pCheckTimer:Timer;
 			private var p2pCheckTimer2:Timer;
 			
 			private var p2pSuccess:Boolean;
 			private var p2pSuccess2:Boolean;
+			
+			private var currentTalentId:int;
 			
 			// called when application is loaded            		
 			private function init():void
@@ -168,6 +172,7 @@ Author: Jozsef Vass
 					WebServiceUrl = "http://www.localshiyishi.cn/reg/index.do";
 					userResumeUrl = "http://www.localshiyishi.cn/enterp/resume/viewSwf.html?uid=";
 					smsServiceUrl = "http://www.localshiyishi.cn/enterp/send_interview/sendInvite.do";
+					jobTitleUrl = "http://www.localshiyishi.cn/getJobTitleForSWF.do";
 					thirdPartyList.url = WebServiceUrl;
 					
 					myAccountId = FlexGlobals.topLevelApplication.parameters.userId;
@@ -184,15 +189,15 @@ Author: Jozsef Vass
 					WebServiceUrl = "http://www.shiyishi.cn/reg/index.do";
 					userResumeUrl = "http://www.shiyishi.cn/enterp/resume/viewSwf.html?uid=";
 					smsServiceUrl = "http://www.shiyishi.cn/enterp/send_interview/sendInvite.do";
+					jobTitleUrl = "http://www.shiyishi.cn/getJobTitleForSWF.do";
 					thirdPartyList.url = WebServiceUrl;
 					
 					myAccountId = FlexGlobals.topLevelApplication.parameters.userId;
 					myName = FlexGlobals.topLevelApplication.parameters.userName;
 					userRole = FlexGlobals.topLevelApplication.parameters.userRole;
 				}
-				
-
-				
+				roomId = FlexGlobals.topLevelApplication.parameters.roomId;
+			
 				smsService.url = smsServiceUrl;
 				status("Player: " + Capabilities.version + "\n");
 				
@@ -1063,7 +1068,8 @@ Author: Jozsef Vass
 			{
 				if (userRole == 'company')
 				{	
-					userResume.url = userResumeUrl+userList.getItemAt(event.selectionChange.rowIndex)['userId'];
+					currentTalentId = userList.getItemAt(event.selectionChange.rowIndex)['userId'];
+					userResume.url = userResumeUrl + currentTalentId;
 					nextRemoteName = userList.getItemAt(event.selectionChange.rowIndex)['userName'];
 					nextRemoteId = userList.getItemAt(event.selectionChange.rowIndex)['identity'];
 					//get resume todo
@@ -1097,6 +1103,16 @@ Author: Jozsef Vass
 			private function getUserResume(event:ResultEvent):void
 			{
 				resume.text = event.result.toString();
+				var request:Object = new Object();
+				request.aid = roomId;
+				request.uid = currentTalentId;
+				jobTitle.url = jobTitleUrl;
+				jobTitle.send(request);
+			}
+			
+			private function getJobTitle(event:ResultEvent):void
+			{
+				resume.text += "==============\n面试职位:\n" + event.result.toString();
 			}
 			
 			private function sendInviteCode():void
@@ -1161,6 +1177,7 @@ Author: Jozsef Vass
 	
 	<fx:Declarations>
 		<s:HTTPService id="userResume" result="getUserResume(event)" resultFormat="text"/>
+		<s:HTTPService id="jobTitle" result="getJobTitle(event)" resultFormat="text"/>
 		<s:HTTPService id="smsService" result="smsSentRes(event)" resultFormat="text"/>
 		<s:HTTPService id="thirdPartyList" result="getThirdPartyList()"/>
 	</fx:Declarations>

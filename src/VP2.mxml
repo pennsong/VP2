@@ -535,7 +535,14 @@ Author: Jozsef Vass
 			private function connectSuccess():void
 			{
 				myId = netConnection.nearID;
-				infoMsg("连接成功!");
+				if (userRole == 'talent')
+				{
+					infoMsg("连接成功!面试官正忙，请耐心等待面试官的邀请");
+				}
+				else
+				{
+					infoMsg("连接成功!");
+				}
 				status("Connected, my ID: " + netConnection.nearID + "\n");
 				
 				// exchange peer id using web service

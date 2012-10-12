@@ -35,7 +35,7 @@ Author: Jozsef Vass
 			import spark.events.GridSelectionEvent;
 			
 			//testing switch setting
-			private var test:Boolean = true;
+			private var test:Boolean = false;
 			// rtmfp server address (Adobe Cirrus or FMS)
 
 			[Bindable] private var connectUrl:String;

@@ -168,7 +168,7 @@ Author: Jozsef Vass
 				//test case
 				if (test == true)
 				{
-					connectUrl = "rtmfp://112.65.246.54/cr";
+					connectUrl = "rtmfp://210.51.38.12/cr";
 					WebServiceUrl = "http://www.localshiyishi.cn/reg/index.do";
 					userResumeUrl = "http://www.localshiyishi.cn/enterp/resume/viewSwf.html?uid=";
 					smsServiceUrl = "http://www.localshiyishi.cn/enterp/send_interview/sendInvite.do";
@@ -185,7 +185,7 @@ Author: Jozsef Vass
 				//live case
 				else
 				{
-					connectUrl = "rtmfp://210.51.38.12/cr"
+					connectUrl = "rtmfp://112.65.246.54/cr"
 					WebServiceUrl = "http://www.shiyishi.cn/reg/index.do";
 					userResumeUrl = "http://www.shiyishi.cn/enterp/resume/viewSwf.html?uid=";
 					smsServiceUrl = "http://www.shiyishi.cn/enterp/send_interview/sendInvite.do";
